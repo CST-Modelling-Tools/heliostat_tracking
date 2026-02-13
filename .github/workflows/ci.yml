@@ -3,18 +3,16 @@ name: CI
 on:
   push:
   pull_request:
-  workflow_dispatch:
 
 jobs:
-  build-test:
-    name: ${{ matrix.os }} / ${{ matrix.preset }}
-    runs-on: ${{ matrix.os }}
-
+  build-and-test:
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
-        preset: [ci-release, ci-debug]
+        cfg: [release, debug]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -23,22 +21,23 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          # Choose what you want to support. If you really need 3.14 and it's available, set it here.
-          # Otherwise, 3.12 is a safe default today.
           python-version: "3.12"
 
-      # Make CMakePresets.json inheritance work:
-      # your presets expect ${env:pythonLocation}
-      - name: Export pythonLocation for presets
-        shell: bash
+      - name: Install Python deps (pybind11)
         run: |
-          echo "pythonLocation=${pythonLocation}" >> $GITHUB_ENV
+          python -m pip install --upgrade pip
+          python -m pip install pybind11
 
-      - name: Configure (CMake preset)
-        run: cmake --preset ${{ matrix.preset }}
+      # Ninja is already present on GH runners most of the time, but this makes it deterministic.
+      - name: Setup Ninja (Windows)
+        if: runner.os == 'Windows'
+        uses: seanmiddleditch/gha-setup-ninja@v5
 
-      - name: Build (CMake preset)
-        run: cmake --build --preset ci-build-${{ contains(matrix.preset, 'release') && 'release' || 'debug' }}
+      - name: Configure
+        run: cmake --preset ci-${{ matrix.cfg }}
 
-      - name: Test (CTest preset)
-        run: ctest --preset ci-test-${{ contains(matrix.preset, 'release') && 'release' || 'debug' }}
+      - name: Build
+        run: cmake --build --preset ci-build-${{ matrix.cfg }}
+
+      - name: Test
+        run: ctest --preset ci-test-${{ matrix.cfg }}

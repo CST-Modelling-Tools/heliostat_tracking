@@ -1,5 +1,11 @@
 {
   "version": 10,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 1
+  },
+
   "configurePresets": [
     {
       "name": "local-base",
@@ -15,12 +21,17 @@
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     },
+
     {
       "name": "local-python-windows",
       "displayName": "Local Python (Windows, repo .venv)",
       "hidden": true,
       "inherits": "local-base",
-      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
       "cacheVariables": {
         "Python_EXECUTABLE": "${sourceDir}/.venv/Scripts/python.exe"
       }
@@ -43,7 +54,7 @@
     {
       "name": "release",
       "displayName": "Release (Local)",
-      "inherits": ["local-python-windows", "local-python-unix"],
+      "inherits": ["local-base", "local-python-windows", "local-python-unix"],
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
@@ -51,7 +62,7 @@
     {
       "name": "debug",
       "displayName": "Debug (Local)",
-      "inherits": ["local-python-windows", "local-python-unix"],
+      "inherits": ["local-base", "local-python-windows", "local-python-unix"],
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
@@ -66,38 +77,17 @@
         "HELIOS_BUILD_TESTS": "ON",
         "HELIOS_BUILD_EXAMPLES": "ON",
         "HELIOS_BUILD_PYTHON": "ON",
-        "HELIOS_BUILD_MATHEMATICA": "OFF"
-      }
-    },
-    {
-      "name": "ci-python-windows",
-      "displayName": "CI Python (Windows)",
-      "hidden": true,
-      "inherits": "ci-base",
-      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
-      "cacheVariables": {
-        "Python_EXECUTABLE": "${env:pythonLocation}/python.exe"
-      }
-    },
-    {
-      "name": "ci-python-unix",
-      "displayName": "CI Python (Linux/macOS)",
-      "hidden": true,
-      "inherits": "ci-base",
-      "condition": {
-        "type": "inList",
-        "string": "${hostSystemName}",
-        "list": ["Linux", "Darwin"]
-      },
-      "cacheVariables": {
-        "Python_EXECUTABLE": "${env:pythonLocation}/bin/python"
-      }
-    },
+        "HELIOS_BUILD_MATHEMATICA": "OFF",
 
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+
+        "Python_EXECUTABLE": "python"
+      }
+    },
     {
       "name": "ci-release",
       "displayName": "CI Release",
-      "inherits": ["ci-python-windows", "ci-python-unix"],
+      "inherits": "ci-base",
       "binaryDir": "${sourceDir}/build/ci/release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
@@ -106,7 +96,7 @@
     {
       "name": "ci-debug",
       "displayName": "CI Debug",
-      "inherits": ["ci-python-windows", "ci-python-unix"],
+      "inherits": "ci-base",
       "binaryDir": "${sourceDir}/build/ci/debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
@@ -125,6 +115,7 @@
       "displayName": "Build (Debug)",
       "configurePreset": "debug"
     },
+
     {
       "name": "ci-build-release",
       "displayName": "CI Build (Release)",
@@ -150,6 +141,7 @@
       "configurePreset": "debug",
       "output": { "outputOnFailure": true }
     },
+
     {
       "name": "ci-test-release",
       "displayName": "CI CTest (Release)",
