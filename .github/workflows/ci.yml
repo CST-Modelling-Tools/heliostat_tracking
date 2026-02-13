@@ -1,43 +1,118 @@
-name: CI
+name: C++ CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
-  build-and-test:
+  build:
+    name: ${{ matrix.os }}-${{ matrix.cfg }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
-        cfg: [release, debug]
-
-    runs-on: ${{ matrix.os }}
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        cfg: [Release, Debug]
 
     steps:
-      - name: Checkout
+      - name: Checkout (with submodules)
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
 
-      - name: Setup Python
+      # Windows: ensure MSVC environment (similar to your old workflow)
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install Python deps (pybind11)
+      - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install pybind11
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install pybind11 pytest
 
-      # Ninja is already present on GH runners most of the time, but this makes it deterministic.
-      - name: Setup Ninja (Windows)
-        if: runner.os == 'Windows'
-        uses: seanmiddleditch/gha-setup-ninja@v5
+      # If your presets already select Ninja, you do NOT need to install it on hosted runners.
+      # But it doesn't hurt to ensure CMake is present/up-to-date:
+      - name: Show tool versions
+        run: |
+          cmake --version
+          python --version
 
-      - name: Configure
-        run: cmake --preset ci-${{ matrix.cfg }}
+      # Map matrix cfg -> preset name
+      - name: Configure (Release)
+        if: matrix.cfg == 'Release'
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cmake --preset ci-release -DPython_EXECUTABLE="${pythonLocation}\\python.exe"
+          else
+            cmake --preset ci-release -DPython_EXECUTABLE="${pythonLocation}/bin/python"
+          fi
 
+      - name: Configure (Debug)
+        if: matrix.cfg == 'Debug'
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cmake --preset ci-debug -DPython_EXECUTABLE="${pythonLocation}\\python.exe"
+          else
+            cmake --preset ci-debug -DPython_EXECUTABLE="${pythonLocation}/bin/python"
+          fi
+
+      # Build using the build dir implied by the configure preset (your presets use binaryDir)
       - name: Build
-        run: cmake --build --preset ci-build-${{ matrix.cfg }}
+        shell: bash
+        run: |
+          if [ "${{ matrix.cfg }}" = "Release" ]; then
+            cmake --build --preset ci-release
+          else
+            cmake --build --preset ci-debug
+          fi
 
-      - name: Test
-        run: ctest --preset ci-test-${{ matrix.cfg }}
+      # Tests:
+      # - Windows: just run ctest (and/or the exe directly)
+      # - macOS/Linux: mimic your old workflow: verify Python import first, then run tests
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ("${{ matrix.cfg }}" -eq "Release") {
+            ctest --preset ci-release --output-on-failure
+          } else {
+            ctest --preset ci-debug --output-on-failure
+          }
+
+      - name: Test (macOS/Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          if [ "${{ matrix.cfg }}" = "Release" ]; then
+            BUILD_DIR="build/ci/release"
+          else
+            BUILD_DIR="build/ci/debug"
+          fi
+
+          # Your CMakeLists sets output dirs as ${CMAKE_BINARY_DIR}/$<CONFIG>
+          # On single-config generators (Ninja), $<CONFIG> == CMAKE_BUILD_TYPE
+          # so Release artifacts are in .../Release and Debug in .../Debug
+          export PYTHONPATH="${{ github.workspace }}/${BUILD_DIR}/${{ matrix.cfg }}"
+
+          python -c "import sys; print(sys.path)"
+          python -c "import heliostat_tracking_module"
+
+          ctest --test-dir "${{ github.workspace }}/${BUILD_DIR}" --output-on-failure
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-${{ matrix.cfg }}-${{ runner.os }}
+          path: |
+            build/ci/release/**
+            build/ci/debug/**
