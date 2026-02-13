@@ -1,156 +1,44 @@
-name: C++ CI
+name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build-test:
+    name: ${{ matrix.os }} / ${{ matrix.preset }}
+    runs-on: ${{ matrix.os }}
+
     strategy:
+      fail-fast: false
       matrix:
-        configuration: [Release, Debug]
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        preset: [ci-release, ci-debug]
+
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up MSVC
-        uses: ilammy/msvc-dev-cmd@v1.13.0
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Clone Google Test
-        run:  git clone https://github.com/google/googletest.git googletest
-
-      - name: Set up Python
-        uses: actions/setup-python@v5.1.0
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.12.2'
+          # Choose what you want to support. If you really need 3.14 and it's available, set it here.
+          # Otherwise, 3.12 is a safe default today.
+          python-version: "3.12"
 
-      - name: Install Python dependencies
-        run: python -m pip install --upgrade pip setuptools wheel cmake pybind11 pytest        
-        
-      - name: Create Build Environment
-        run: cmake -E make_directory ${{github.workspace}}/build
-        
-      - name: Configure CMake Windows
+      # Make CMakePresets.json inheritance work:
+      # your presets expect ${env:pythonLocation}
+      - name: Export pythonLocation for presets
+        shell: bash
         run: |
-          cmake ${{ github.workspace }} -B ${{ github.workspace }}/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DPYTHON_EXECUTABLE=${{ env.pythonLocation }}/pytho
+          echo "pythonLocation=${pythonLocation}" >> $GITHUB_ENV
 
-      - name: Build
-        run: cmake --build ${{github.workspace}}/build --config  ${{ matrix.configuration }}
-        
-      - name: Run Tests
-        run: ${{github.workspace}}/build/${{ matrix.configuration }}/heliostat_tracking_tests.exe
+      - name: Configure (CMake preset)
+        run: cmake --preset ${{ matrix.preset }}
 
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts-${{ matrix.configuration }}-windows
-          path: ${{github.workspace}}/build/${{ matrix.configuration }}/
+      - name: Build (CMake preset)
+        run: cmake --build --preset ci-build-${{ contains(matrix.preset, 'release') && 'release' || 'debug' }}
 
-  build-macos:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        configuration: [Release, Debug]
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Clone Google Test
-        run: git clone https://github.com/google/googletest.git googletest
-
-      - name: Set up Python
-        uses: actions/setup-python@v5.1.0
-        with:
-          python-version: '3.12.2'
-
-      - name: Upgrade pip
-        run: python3 -m pip install --upgrade pip
-        
-      - name: Install Python dependencies for building
-        run: python -m pip install --upgrade pip setuptools wheel pybind11        
-        
-      - name: Create Build Environment
-        run: cmake -E make_directory ${{github.workspace}}/build
-
-      - name: Configure CMake macOS
-        run: cmake ${{github.workspace}} -B ${{github.workspace}}/build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DPYTHON_EXECUTABLE=${{ env.pythonLocation }}/python
-        
-      - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{ matrix.configuration }}
-
-      - name: List Build Directory
-        run: ls -lR ${{ github.workspace }}/build
-
-      - name: Set PYTHONPATH and Run Tests
-        run: |
-          export PYTHONPATH=${{ github.workspace }}/build/${{ matrix.configuration }}
-          python3 -c "import sys; print(sys.path)"
-          python3 -c "import heliostat_tracking_module"
-          ${{ github.workspace }}/build/${{ matrix.configuration }}/heliostat_tracking_tests
-        
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts-${{ matrix.configuration }}-macos
-          path: ${{github.workspace}}/build/${{ matrix.configuration }}
-
-  build-linux:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        configuration: [Release, Debug]
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install Dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake g++ libgtest-dev
-        
-      - name: Clone Google Test
-        run: |
-          git clone https://github.com/google/googletest.git
-          cd googletest
-          git checkout release-1.12.1  # Ensure a stable release
-          mkdir build
-          cd build
-          cmake ..
-          make
-
-      - name: Set up Python
-        uses: actions/setup-python@v5.1.0
-        with:
-          python-version: '3.12.2'
-
-      - name: Upgrade pip
-        run: python3 -m pip install --upgrade pip
-        
-      - name: Install Python dependencies for building
-        run: python3 -m pip install --upgrade pip setuptools wheel pybind11
-          
-      - name: Create Build Environment
-        run: cmake -E make_directory ${{ github.workspace }}/build
-
-      - name: List Source Directory
-        run: ls -lR ${{ github.workspace }}/examples/bluesolar_points
-
-      - name: Configure CMake Linux
-        run: cmake ${{ github.workspace }} -B ${{ github.workspace }}/build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DPYTHON_EXECUTABLE=${{ env.pythonLocation }}/python3
-        
-      - name: Build
-        run: cmake --build ${{ github.workspace }}/build --config ${{ matrix.configuration }}
-
-      - name: List Build Directory
-        run: ls -lR ${{ github.workspace }}/build
-
-      - name: Set PYTHONPATH and Run Tests
-        run: |
-          export PYTHONPATH=${{ github.workspace }}/build/${{ matrix.configuration }}
-          python3 -c "import sys; print(sys.path)"
-          python3 -c "import heliostat_tracking_module"
-          ${{ github.workspace }}/build/${{ matrix.configuration }}/heliostat_tracking_tests
-        
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts-${{ matrix.configuration }}-linux
-          path: ${{github.workspace}}/build/${{ matrix.configuration }}
+      - name: Test (CTest preset)
+        run: ctest --preset ci-test-${{ contains(matrix.preset, 'release') && 'release' || 'debug' }}

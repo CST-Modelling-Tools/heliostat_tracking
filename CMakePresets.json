@@ -1,0 +1,166 @@
+{
+  "version": 10,
+  "configurePresets": [
+    {
+      "name": "local-base",
+      "displayName": "Local (base)",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "HELIOS_BUILD_TESTS": "ON",
+        "HELIOS_BUILD_EXAMPLES": "ON",
+        "HELIOS_BUILD_PYTHON": "ON",
+        "HELIOS_BUILD_MATHEMATICA": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "local-python-windows",
+      "displayName": "Local Python (Windows, repo .venv)",
+      "hidden": true,
+      "inherits": "local-base",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "cacheVariables": {
+        "Python_EXECUTABLE": "${sourceDir}/.venv/Scripts/python.exe"
+      }
+    },
+    {
+      "name": "local-python-unix",
+      "displayName": "Local Python (Linux/macOS, repo .venv)",
+      "hidden": true,
+      "inherits": "local-base",
+      "condition": {
+        "type": "inList",
+        "string": "${hostSystemName}",
+        "list": ["Linux", "Darwin"]
+      },
+      "cacheVariables": {
+        "Python_EXECUTABLE": "${sourceDir}/.venv/bin/python"
+      }
+    },
+
+    {
+      "name": "release",
+      "displayName": "Release (Local)",
+      "inherits": ["local-python-windows", "local-python-unix"],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug (Local)",
+      "inherits": ["local-python-windows", "local-python-unix"],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+
+    {
+      "name": "ci-base",
+      "displayName": "CI (base)",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "HELIOS_BUILD_TESTS": "ON",
+        "HELIOS_BUILD_EXAMPLES": "ON",
+        "HELIOS_BUILD_PYTHON": "ON",
+        "HELIOS_BUILD_MATHEMATICA": "OFF"
+      }
+    },
+    {
+      "name": "ci-python-windows",
+      "displayName": "CI Python (Windows)",
+      "hidden": true,
+      "inherits": "ci-base",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "cacheVariables": {
+        "Python_EXECUTABLE": "${env:pythonLocation}/python.exe"
+      }
+    },
+    {
+      "name": "ci-python-unix",
+      "displayName": "CI Python (Linux/macOS)",
+      "hidden": true,
+      "inherits": "ci-base",
+      "condition": {
+        "type": "inList",
+        "string": "${hostSystemName}",
+        "list": ["Linux", "Darwin"]
+      },
+      "cacheVariables": {
+        "Python_EXECUTABLE": "${env:pythonLocation}/bin/python"
+      }
+    },
+
+    {
+      "name": "ci-release",
+      "displayName": "CI Release",
+      "inherits": ["ci-python-windows", "ci-python-unix"],
+      "binaryDir": "${sourceDir}/build/ci/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "ci-debug",
+      "displayName": "CI Debug",
+      "inherits": ["ci-python-windows", "ci-python-unix"],
+      "binaryDir": "${sourceDir}/build/ci/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ],
+
+  "buildPresets": [
+    {
+      "name": "build-release",
+      "displayName": "Build (Release)",
+      "configurePreset": "release"
+    },
+    {
+      "name": "build-debug",
+      "displayName": "Build (Debug)",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "ci-build-release",
+      "displayName": "CI Build (Release)",
+      "configurePreset": "ci-release"
+    },
+    {
+      "name": "ci-build-debug",
+      "displayName": "CI Build (Debug)",
+      "configurePreset": "ci-debug"
+    }
+  ],
+
+  "testPresets": [
+    {
+      "name": "test-release",
+      "displayName": "CTest (Release)",
+      "configurePreset": "release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "test-debug",
+      "displayName": "CTest (Debug)",
+      "configurePreset": "debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ci-test-release",
+      "displayName": "CI CTest (Release)",
+      "configurePreset": "ci-release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ci-test-debug",
+      "displayName": "CI CTest (Debug)",
+      "configurePreset": "ci-debug",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}
